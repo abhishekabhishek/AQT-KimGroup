@@ -3,6 +3,19 @@ import random, os
 
 
 def int2basestr(n, b, l=0):
+    """Convert int n into a b-nary list of size l e.g. returns [0, 1, 0] for
+    (2, 2, l=3)
+    
+    Args:
+        n (int) : Integer to convert to a b-nary representation
+        b (int) : Base of the b-nary representation e.g. 2 -> 0, 1, 
+                  3 -> 0, 1, 2
+        l (int) : Length of the b-nary list, if precision is not enough, 
+                  it overflows
+                  
+    Returns:
+        (list) : List of size l? i.e. the b-nary representation of n
+    """
     d = int(n%b)
     if d == n:
         return [0 for _ in range(l-1)] + [d]
@@ -11,6 +24,7 @@ def int2basestr(n, b, l=0):
         return [0 for _ in range(l-len(a))] + a
     
 def basestr2int(st, b):
+    """Convert b-nary list st into int n e.g. returns 3 for ([0, 1, 1], 2)"""
     return sum([st[i] * b**(len(st)-i-1) for i in range(len(st))])
 
 def BitFlip(n, N, pos):
@@ -27,9 +41,6 @@ class POVM():
         self.povm = povm
         # POVMs and other operators
         # Pauli matrices
-
-
-
         if self.povm == 'tetra':
             self.Na, self.M, self.TinvM = Tetra()
         elif self.povm == 'pauli4':
@@ -39,10 +50,6 @@ class POVM():
         else:
             print('Unknown POVM')
             return
-
-
-
-
         return
 
 def Tetra():
@@ -72,24 +79,34 @@ def Tetra():
 def Pauli4(xyz):
     Na = 4
 
-    Vz = np.array([[[1],[0]], [[0],[1]]])
-    Vx = (1./np.sqrt(2))*np.array([[[1],[1]], [[1],[-1]]])
-    Vy = (1./np.sqrt(2))*np.array([[[1],[1j]], [[1],[-1j]]])
+    # Shape of each = (2, 2, 1)
+    Vz = np.array([[[1],[0]], [[0],[1]]]) # [|0>, |1>]
+    Vx = (1./np.sqrt(2))*np.array([[[1],[1]], [[1],[-1]]]) # [|+>, |->]
+    Vy = (1./np.sqrt(2))*np.array([[[1],[1j]], [[1],[-1j]]]) # [|i>, |-i>]
 
-
+    # Shape of each = (2, 2, 2)
+    # [|0><0|, |1><1|]
     Mz = np.array([np.matmul(V, np.conj(np.transpose(V))) for V in Vz])
+    # [|+><+|, |-><-|]
     Mx = np.array([np.matmul(V, np.conj(np.transpose(V))) for V in Vx])
+    # [|i><i|, |-i><-i|]
     My = np.array([np.matmul(V, np.conj(np.transpose(V))) for V in Vy])
 
+    # Shape = (4, 2, 2)
     M = np.zeros((Na, 2, 2), dtype=complex)
-
+ 
+    # xyz (int) into [X, X, X] (binary), X = 0 or 1
     [xi, yi, zi] = int2basestr(xyz, 2, l=3)
 
+    # [000] -> M_0 = |0><0|, M_1 = |+><+|, M2 = |i><i|
+    # M3 = (|1><1| + |-><-| + |-i><-i|)
     M[0] = (1./3)*Mz[zi]
     M[1] = (1./3)*Mx[xi]
     M[2] = (1./3)*My[yi]
     M[3] = (1./3)*(Mz[1-zi] + Mx[1-xi] + My[1-yi])
 
+    # Shape (4, 2, 2) 
+    # TinvM[i] = (Tinv[i, 0] * M[0]) + ... + (Tinv[i, 4] * M[4])
     _, _, TinvM = GetT(M)
 
     return Na, M, TinvM
@@ -97,13 +114,15 @@ def Pauli4(xyz):
 def Pauli6(xyz):
     Na = 6
 
-    V0 = np.array([[1],[0]])
-    V1 = np.array([[0],[1]])
-    Vp = (1./np.sqrt(2))*np.array([[1],[1]])
-    Vm = (1./np.sqrt(2))*np.array([[1],[-1]])
-    Vr = (1./np.sqrt(2))*np.array([[1],[1j]])
-    Vl = (1./np.sqrt(2))*np.array([[1],[-1j]])
+    # |i> for each POVM element
+    V0 = np.array([[1], [0]])
+    V1 = np.array([[0], [1]])
+    Vp = (1./np.sqrt(2))*np.array([[1], [1]])
+    Vm = (1./np.sqrt(2))*np.array([[1], [-1]])
+    Vr = (1./np.sqrt(2))*np.array([[1], [1j]])
+    Vl = (1./np.sqrt(2))*np.array([[1], [-1j]])
 
+    # E_i = |i><i| for each POVM element
     M00 = np.matmul(V0, np.conj(np.transpose(V0)))
     M11 = np.matmul(V1, np.conj(np.transpose(V1)))
     Mpp = np.matmul(Vp, np.conj(np.transpose(Vp)))
@@ -111,9 +130,10 @@ def Pauli6(xyz):
     Mrr = np.matmul(Vr, np.conj(np.transpose(Vr)))
     Mll = np.matmul(Vl, np.conj(np.transpose(Vl)))
 
+    # POVM set shape = (6, 2, 2) for single qubit
     M = np.zeros((Na, len(V0), len(V0)), dtype=complex)
 
-    
+    # Pauli-6 POVM
     M[0] = (1./3)*M00
     M[1] = (1./3)*Mpp
     M[2] = (1./3)*Mrr
@@ -121,8 +141,11 @@ def Pauli6(xyz):
     M[4] = (1./3)*Mmm
     M[5] = (1./3)*Mll
 
+    # xyz (int) into [X, X, X] (binary), X = 0 or 1
     [xi, yi, zi] = int2basestr(xyz, 2, l=3)
 
+    # Shape (4, 2, 2) 
+    # P4TinvM[i] = (Tr[[M[i]*M[0]]] * M[0]) + ... + (Tr[[M[i]*M[4]]] * M[4])
     _, _, P4TinvM = Pauli4(xyz)
 
     TinvM = np.zeros((6, 2, 2), dtype=complex)
@@ -130,26 +153,36 @@ def Pauli6(xyz):
     TinvM[3*zi] = P4TinvM[0]
     TinvM[1+3*xi] = P4TinvM[1]
     TinvM[2+3*yi] = P4TinvM[2]
+
+    # Three different outcomes of Pauli-6 identified as the single element of
+    # Pauli-4
     TinvM[3-3*zi] = P4TinvM[3]
     TinvM[4-3*xi] = P4TinvM[3]
     TinvM[5-3*yi] = P4TinvM[3]
-    
+
     return Na, M, TinvM
 
 def GetT(M):
     Na = len(M)
 
+    # Shape = (4, 4) for Pauli-4
     T = np.zeros((Na, Na), dtype=complex)
+    
     for na1 in range(Na):
         for na2 in range(Na):
+            # T[i, j] = Tr[M[i]*M[j]]
             T[na1, na2] = np.trace(np.matmul(M[na1], M[na2]))
+            
     Tinv = np.linalg.inv(T)
 
+    # Shape = (4, 2, 2) for Pauli-4
     TinvM = np.zeros(M.shape, dtype=complex)
 
     for na1 in range(Na):
         for na2 in range(Na):
+            # TinvM[i] = (Tinv[i, 0] * M[0]) + ... + (Tinv[i, 4] * M[4])
             TinvM[na1, :, :] += Tinv[na1, na2] * M[na2, :, :]
+            
     return T, Tinv, TinvM
 
 class SampleDM():

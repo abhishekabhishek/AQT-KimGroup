@@ -10,16 +10,28 @@ from mpl_toolkits.mplot3d import Axes3D
 # Exact classical fidelity
 
 def int2basestr(n, b, l=0):
-    d = int(n%b)
+    """Convert int n into a b-nary list of size l e.g. returns [0, 1, 0] for
+    (2, 2, l=3)
+
+    Args:
+        n (int) : Integer to convert to a b-nary representation
+        b (int) : Base of the b-nary representation e.g. 2 -> {0, 1},
+                  3 -> {0, 1, 2}
+        l (int) : Length of the b-nary list, if precision is not enough, 
+                  it overflows
+
+    Returns:
+        (list) : List of size l? i.e. the b-nary representation of n
+    """
+    d = int(n % b)
     if d == n:
         return [0 for _ in range(l-1)] + [d]
     else:
         a = int2basestr(int((n-d)/b), b) + [d]
         return [0 for _ in range(l-len(a))] + a
-    
+
 def basestr2int(st, b):
     return sum([st[i] * b**(len(st)-i-1) for i in range(len(st))])
-
 
 
 # Exact classical fidelity for permutation invariant systems
@@ -122,10 +134,21 @@ def ClFid_perminv(gen1, gen2, print_time = 0, verbose=True):
 # Retrieve density matrix element
 
 def POVMProbTable(gen):
-    Nq = gen.Nq
-    Na = gen.Na
+    """Build POVM probability table using the generator
 
-    return np.array([gen.p(int2basestr(n, Na, l=Nq)) for n in range(Na**Nq)], dtype=float)
+    Args:
+        gen (nn.Module) : Generative model under which to calculate the 
+                          probabilities for all possible POVM outcomes
+    Returns:
+        (np.ndarray) : Shape (Na**Nq, 1) with prob. for each possible possible
+                       tensor product POVM outcome
+    """
+    # No. of qubits and no. of POVM elements
+    Nq, Na = gen.Nq, gen.Na
+
+    # Vector of dimension (Na**Nq x 1)
+    return np.array([gen.p(int2basestr(n, Na, l=Nq)) for n in range(Na**Nq)],
+                    dtype=float)
 
 
 def ClFid(ptab1, ptab2):
@@ -153,6 +176,15 @@ def ClFidEst(gen1, gen2, Ns=1000, print_time=10, samples=None):
     return p/Ns
 
 def GetDMFull(ptab, Nq, povm, Ns=0, samples=[]):
+    """Reconstruct the density matrix using inversion
+    
+    Args:
+        ptab (np.ndarray): Probability table of size (Na**Nq, 1) where each
+                           element approximates p(i|rho) for all possible POVM
+                           outcomes
+        Nq (int): No. of qubits
+        povm (POVM): 
+    """
     Na = povm.Na
     TinvM = povm.TinvM
 
