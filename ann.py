@@ -4,8 +4,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math, copy, time
 from torch.autograd import Variable
-
-
     
 # BUILD THE NETWORK
 
@@ -36,7 +34,20 @@ class Transformer(nn.Module):
         self.Na = Na
         
     def forward(self, tgt, tgt_mask):
-        "Take in and process masked target sequences."
+        """Take in and process masked target sequences.
+
+        Args:
+           tgt (torch.Tensor): Batch of {start_token + n_q measurements}
+                               samples passed through embedding and positional
+                               encoding layers
+                               dims = (batch_size, n_qubits+1, d_model)
+           tgt_mask (torch.Tensor): batch_size copies of subsequent mask to
+                                    only receive information from previous
+                                    measurements
+                                    dims=(batch_size, n_qubits+1, n_qubits+1)
+        Returns;
+            (torch.Tensor): dims=(batch_size, n_qubits+1, d_model)
+        """
         return self.decoder(self.tgt_embed(tgt), tgt_mask)
 
     def p(self, a_vec, ret_tensor=False):
@@ -125,22 +136,31 @@ def sample(model, Ns, device):
     outcomes.to('cpu')
     return outcomes[:, 1:]-3
 
-    
+
 class Generator(nn.Module):
     "Define standard linear + softmax generation step."
     def __init__(self, d_model, vocab):
         """
         Args:
             d_model (int) : Embedding dimension
-            vocab (?) : ?
+            vocab (int) : Size of the vocabulary, set to POVM.Na
         """
         super(Generator, self).__init__()
         self.proj = nn.Linear(d_model, vocab)
 
     def forward(self, x):
+        """
+        Args:
+            x (torch.Tensor): Input sequence embedding+pe representation passed
+                              through the Decoder,
+                              dims=(batch_size, n_qubits+1, d_model)
+        Returns:
+            (torch.Tensor): Log prob of each qubit to be each of the values in
+                            vocab, dims=(batch_size, n_qubits+1, vocab)
+        """
         return F.log_softmax(self.proj(x), dim=-1)
-    
-# BASIC BUILDING BLOCKS    
+
+# BASIC BUILDING BLOCKS
 def clones(module, N):
     "Produce N identical layers."
     return nn.ModuleList([copy.deepcopy(module) for _ in range(N)])
@@ -157,8 +177,7 @@ class LayerNorm(nn.Module):
         mean = x.mean(-1, keepdim=True)
         std = x.std(-1, keepdim=True)
         return self.a_2 * (x - mean) / (std + self.eps) + self.b_2
-    
-    
+
 class SublayerConnection(nn.Module):
     """
     A residual connection followed by a layer norm.
@@ -210,6 +229,18 @@ class DecoderLayer(nn.Module):
         self.sublayer = clones(SublayerConnection(size, dropout), 3)
  
     def forward(self, x, tgt_mask):
+        """
+        Args:
+            x (torch.Tensor): Embedding+PositionalEncoding(x), dims=(
+                batch_size, n_qubits+1, d_model)
+            tgt_mask (torch.Tensor): Subsequent masking e.g.
+            [[True, False, ..., False]
+             [True, True, ...,  False]
+             [True, True, ...,  True]]
+            dims=(batch_size, n_qubits+1, n_qubits+1)
+        Returns:
+           (torch.Tensor): dims=?
+        """
         "Follow Figure 1 (right) for connections."
         x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, tgt_mask))
         x = self.sublayer[1](x, lambda x: self.self_attn(x, x, x, tgt_mask))
@@ -243,12 +274,14 @@ def subsequent_mask(size):
 
 def attention(query, key, value, mask=None, dropout=None):
     "Compute 'Scaled Dot Product Attention'"
+    # d_k should be d_model // h
     d_k = query.size(-1)
+    # QK^T/sqrt(d_k)
     scores = torch.matmul(query, key.transpose(-2, -1)) \
              / math.sqrt(d_k)
     if mask is not None:
         scores = scores.masked_fill(mask == 0, -1e9)
-    p_attn = F.softmax(scores, dim = -1)
+    p_attn = F.softmax(scores, dim=-1)
     if dropout is not None:
         p_attn = dropout(p_attn)
     return torch.matmul(p_attn, value), p_attn
@@ -266,7 +299,7 @@ class MultiHeadedAttention(nn.Module):
         assert d_model % h == 0
         # We assume d_v always equals d_k
         # Floor function but should not be needed due to the assertion above
-        self.d_k = d_model // h  
+        self.d_k = d_model // h
         self.h = h
         self.linears = clones(nn.Linear(d_model, d_model), 4)
         self.attn = None
@@ -275,26 +308,30 @@ class MultiHeadedAttention(nn.Module):
     def forward(self, query, key, value, mask=None):
         """
         Args:
-            query (torch.Tensor): dims=(batch_size*?)
-            key (torch.Tensor): dims=(batch_size*?)
-            value (torch.Tensor): dims=(batch_size*?)
-            mask (torch.Tensor): dims=(batch_size*?)
+            query (torch.Tensor): dims=(batch_size, n_qubits+1, d_model), =trg
+            key (torch.Tensor): dims=(batch_size, n_qubits+1, d_model), =trg
+            value (torch.Tensor): dims=(batch_size, n_qubits+1, d_model), =trg
+            mask (torch.Tensor): dims=(batch_size, n_qubits+1, n_qubits+1)
+
+        Return:
+            x (torch.Tensor): dims=(batch_size, n_qubits+1, d_model)
         """
         "Implements Figure 2"
         if mask is not None:
             # Same mask applied to all h heads.
+            # (batch_size, n_qubits+1, n_qubits+1) to (., 1, ., .)
             mask = mask.unsqueeze(1)
         nbatches = query.size(0)
-        
+
         # 1) Do all the linear projections in batch from d_model => h x d_k
         query, key, value = \
             [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
              for l, x in zip(self.linears, (query, key, value))]
-        
+
         # 2) Apply attention on all the projected vectors in batch.
         x, self.attn = attention(query, key, value, mask=mask,
                                  dropout=self.dropout)
-        
+
         # 3) "Concat" using a view and apply a final linear.
         x = x.transpose(1, 2).contiguous() \
              .view(nbatches, -1, self.h * self.d_k)
@@ -329,6 +366,12 @@ class Embeddings(nn.Module):
         self.d_model = d_model
 
     def forward(self, x):
+        """
+        Args:
+            x (torch.Tensor): dims=(batch_size*n_qubits+1)
+        Returns:
+            (torch.Tensor): dims=()
+        """
         return self.lut(x) * math.sqrt(self.d_model)
 # / EMBEDDING
 
@@ -459,7 +502,9 @@ def LossFunction(x, y):
 
 # LABEL SMOOTHING ?
 class LabelSmoothing(nn.Module):
-    """annotated-transformer - Implement label smoothing.
+    """annotated-transformer - Implement label smoothing. This allows us the
+    model less confidence since even if the model assigns the correct probs. 
+    to the right idx in [0, vocab-1], the loss would still be non-zero. 
     """
     def __init__(self, size, padding_idx, smoothing=0.0):
         """
@@ -481,16 +526,18 @@ class LabelSmoothing(nn.Module):
     def forward(self, x, target):
         """
         Args:
-            x (torch.Tensor): dims=(batch_size*?*vocab), output softmax probs
-                              generated by the decoder
-            target (torch.Tensor): dims=(batch_size*?*vocab), one-hot
-                                   representation?
+            x (torch.Tensor): dims=(batch_size*n_qubits+1, vocab),
+                              output logprobs generated by the decoder
+            target (torch.Tensor): dims=(batch_size*n_qubits+1), measurement
+                                   POVM token sequences e.g. [X, X, ..., 2, X,
+                                   X, ..., 2, ..., 2]
         Returns:
             nn.KLDivLoss(x, y) where x is the decoder output and y is the
             smoothed one-hot vectors
         """
         assert x.size(1) == self.size
         true_dist = x.data.clone()
+        # Distributes self.smoothing over n_qubits-1
         true_dist.fill_(self.smoothing / (self.size - 2))
         true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
         true_dist[:, self.padding_idx] = 0
@@ -564,13 +611,16 @@ def data_to_torch(data):
 
 def data_gen(data, batch_size):
     """Create a iterator/generator and batch the dataset
+    
+    Yields:
+        Batch object with attributes trg, trg_y, trg_mask
     """
     n_samples = len(data)
     n_batches = int(n_samples / batch_size)
 
     # Data batching
     for batch_idx in range(n_batches):
-        # dims=(batch_size, n_qubits)
+        # dims=(batch_size, n_qubits+2)
         data_tgt = data[batch_idx*batch_size:min((batch_idx+1)*batch_size,
                                                  n_samples)]
         tgt = Variable(data_tgt, requires_grad=False)
