@@ -9,7 +9,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 # Exact classical fidelity
 
-def int2basestr(n, b, l=0):
+def int2basestr(n, base, l=0):
     """Convert int n into a b-nary list of size l e.g. returns [0, 1, 0] for
     (2, 2, l=3)
 
@@ -23,15 +23,15 @@ def int2basestr(n, b, l=0):
     Returns:
         (list) : List of size l? i.e. the b-nary representation of n
     """
-    d = int(n % b)
+    d = int(n % base)
     if d == n:
         return [0 for _ in range(l-1)] + [d]
     else:
-        a = int2basestr(int((n-d)/b), b) + [d]
+        a = int2basestr(int((n-d)/base), base) + [d]
         return [0 for _ in range(l-len(a))] + a
 
-def basestr2int(st, b):
-    return sum([st[i] * b**(len(st)-i-1) for i in range(len(st))])
+def basestr2int(st, base):
+    return sum([st[i] * base**(len(st)-i-1) for i in range(len(st))])
 
 
 # Exact classical fidelity for permutation invariant systems
@@ -65,10 +65,10 @@ def GetMultiP(outcome, probability, Nq, Na):
     for nq in range(Nq):
         p[outcome[nq]] += 1
     q = np.cumsum(p)
-    
+
     for na in range(Na-1):
         probability = binom(p[na+1], q[na], c=probability)
-    
+
     return probability
 
 
@@ -120,15 +120,15 @@ def ClFid_perminv(gen1, gen2, print_time = 0, verbose=True):
         N1 = sum(OutP[:,Nq])
         N2 = sum(OutP[:,Nq+1])
 
-        OutP[:,Nq] = OutP[:,Nq]/N1
-        OutP[:,Nq+1] = OutP[:,Nq+1]/N2
+        OutP[:, Nq] = OutP[:, Nq]/N1
+        OutP[:, Nq+1] = OutP[:, Nq+1]/N2
 
         if verbose:
-            OutP = OutP[np.flip(OutP[:,Nq].argsort())]
-            print('Norm 1: ',N1)
-            print('Norm 2: ',N2)
-            print(OutP[:10,Nq:])
-        return sum(np.sqrt(OutP[:,Nq]*OutP[:,Nq+1]))
+            OutP = OutP[np.flip(OutP[:, Nq].argsort())]
+            print('Norm 1: ', N1)
+            print('Norm 2: ', N2)
+            print(OutP[:10, Nq:])
+        return sum(np.sqrt(OutP[:, Nq]*OutP[:, Nq+1]))
 
 
 # Retrieve density matrix element
@@ -154,7 +154,7 @@ def POVMProbTable(gen):
 def ClFid(ptab1, ptab2):
     return np.sum(np.sqrt(ptab1*ptab2))
 
- 
+
 def ClFidEst(gen1, gen2, Ns=1000, print_time=10, samples=None):
     p = 0.
     Nq = gen1.Nq
@@ -177,7 +177,7 @@ def ClFidEst(gen1, gen2, Ns=1000, print_time=10, samples=None):
 
 def GetDMFull(ptab, Nq, povm, Ns=0, samples=[]):
     """Reconstruct the density matrix using inversion
-    
+
     Args:
         ptab (np.ndarray): Probability table of size (Na**Nq, 1) where each
                            element approximates p(i|rho) for all possible POVM
@@ -223,7 +223,6 @@ def plotDM(dm, Nq, figax=None, axis_labels=True):
         for j in range(2**Nq):
             dz.append(abs(dm[i, j]))
 
-
     if figax is None:
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
@@ -239,27 +238,23 @@ def plotDM(dm, Nq, figax=None, axis_labels=True):
 
     ax.set_xbound(-0.2, 2**Nq+0.2)
     ax.set_ybound(-0.2, 2**Nq+0.2)
-    ax.set_zbound(0,0.5)
+    ax.set_zbound(0, 0.5)
 
     if axis_labels:
         ax.set_xticks([0.5, 2**Nq-0.5])
-        ax.set_xticklabels(['000000', '111111'])
+        ax.set_xticklabels(['0'*Nq, '1'*Nq])
         ax.tick_params(axis='x', pad=-10, labelsize=12)
-        plt.setp( ax.xaxis.get_majorticklabels(), rotation=52, ha="right" )
-
-
+        plt.setp( ax.xaxis.get_majorticklabels(), rotation=52, ha="right")
 
         ax.set_yticks([0.5, 2**Nq-0.5])
-        ax.set_yticklabels(['000000', '111111'])
+        ax.set_yticklabels(['0'*Nq, '1'*Nq])
         ax.tick_params(axis='y', pad=-8, labelsize=12)
-        plt.setp( ax.yaxis.get_majorticklabels(), rotation=-14, ha="left" )
-    
+        plt.setp( ax.yaxis.get_majorticklabels(), rotation=-14, ha="left")
     return fig, ax
 
 
 def WeightedDM(weights, dm8):
     dm = 0*np.array(dm8[0])
-    
     for i in range(8):
         dm += weights[i]*dm8[i]
     return dm
@@ -267,21 +262,16 @@ def WeightedDM(weights, dm8):
 
 def MaxNegEig(weights, dm8):
     weights = np.append(np.array(weights), 1-sum(weights))
-    
     dm = WeightedDM(weights, dm8)
     w = eigvalsh(dm)
     return max(0, -min(w.real))
 
 def GetBestDM(dm8):
     x0 = np.full((7), 1/8)
-    bnds = ((0, None), (0, None), (0, None), (0, None), (0, None), (0, None), (0, None))
+    bnds = ((0, None), (0, None), (0, None), (0, None), (0, None), (0, None),
+            (0, None))
     cons = ({'type': 'ineq', 'fun': lambda x:  1-sum(x)})
-    
     res = minimize(MaxNegEig, x0, args=(dm8), bounds=bnds, constraints=cons)
-    
     weights = np.append(res.x, 1-sum(res.x))
-    
     dm = WeightedDM(weights, dm8)
-    
     return weights, res.fun, dm/np.trace(dm)
-    

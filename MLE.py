@@ -69,7 +69,7 @@ def MLELoss(t_params, p, Nq, povm):
         
     q = rho.flatten().real
     L = np.sum((q-p)**2/q)
-    
+
     return L
 
 def MLE_DM(ptab, Nq, povm):

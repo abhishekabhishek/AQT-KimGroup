@@ -58,8 +58,10 @@ class Transformer(nn.Module):
             ret_tensor (bool) : ?
 
         Returns:
-            p (float) : ?
+            p (float) : torch.exp(log_prob) of the sequence under the model
         """
+        # Kind of redundant - a_vec should be a list - returned by 
+        # int2basestr(n, base=Na, length=Nq)
         outcome = list(a_vec)
         
         # Add 3 to each element of a_vec list
@@ -80,7 +82,7 @@ class Transformer(nn.Module):
         p = 1.
         
         for nq in range(self.Nq):
-            p *= p_tensor[0,nq,outcome[nq]].item()
+            p *= p_tensor[0, nq, outcome[nq]].item()
 
         if ret_tensor:
             return (p, p_tensor)
@@ -436,8 +438,8 @@ class Batch:
             tgt_mask (torch.Tensor) : dims=(batch_size, n_qubits+1, n_qubits+1)
                                       tensor of bools, where for each sample in
                                       the batch, we have a 
-                                      (n_qubit+1, n_qubit+1) matrix usually 
-                                      containing True on diagonal and lower-T 
+                                      (n_qubit+1, n_qubit+1) matrix usually
+                                      containing True on diagonal and lower-T
                                       and False on upper-T e.g.
                                       [[ True, False, False],
                                       [ True,  True, False],
@@ -450,10 +452,6 @@ class Batch:
         return tgt_mask
 
 # / BATCHING
-
-
-
-
 
 # OPTIMIZATION: changes learning rate. increases linearly for n=warmup steps, then decays as sqrt(step)
 # class NoamOpt:
@@ -495,7 +493,7 @@ def LossFunction(x, y):
     loss_KL = nn.KLDivLoss(reduction='sum')(x,y)
     loss_L1 = 0.*nn.L1Loss(reduction='sum')(x,y)
     loss_L2 = 0.*nn.MSELoss(reduction='sum')(x,y)
-    print(loss_KL)
+    #print(loss_KL)
     return loss_KL+loss_L1+loss_L2
 # / LOSS FUNCTION
 
