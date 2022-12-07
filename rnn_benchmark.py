@@ -31,8 +31,8 @@ for qi in range(len(Nqlist)):
 
     # GHZ state density matrix
     Ne = 4
-    rhoKB = np.zeros((Ne, 2*Nq), dtype=int)
-    rhoAmp = np.zeros((Ne), dtype=complex)
+    rhoKB = np.zeros((Ne, 2*Nq), dtype=int) # zeros of size (4, 2*Nq)
+    rhoAmp = np.zeros((Ne), dtype=complex) # zeros of size (4)
 
     rhoKB[1, :] = 1
     rhoKB[2, :Nq] = 1

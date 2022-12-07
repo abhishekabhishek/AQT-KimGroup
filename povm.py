@@ -218,9 +218,7 @@ class SampleDM():
 
 
     def samples(self, Ns):
-        
         outcomes = np.zeros((Ns, self.Nq), dtype=int)
-        
         for ns in range(Ns):
             pl = np.array(self.Pl)
             pnorm = 1.
