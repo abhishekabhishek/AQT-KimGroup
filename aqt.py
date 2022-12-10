@@ -89,7 +89,7 @@ def AQT(datapath, Nq, Nep, Nl=2, dmodel=64, Nh=4, save_model=True,
 
 if __name__ == '__main__':
 
-    datapath = 'ghz_3_ibmq/3_2700'
+    datapath = 'data/w_3/pauli6_2700'
     Nq = 3
     Nep = 100
 
