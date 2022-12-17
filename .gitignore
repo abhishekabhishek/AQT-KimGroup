@@ -2,9 +2,9 @@
 #### Manual additions
 ##############################################
 keys.py
-*.npy
-*.npz
-*.mod
+*npy
+*npz
+*mod
 
 ##############################################
 #### Automatically created

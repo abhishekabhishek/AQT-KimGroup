@@ -10,8 +10,9 @@ import sys
 
 # Basic parameters
 
-def AQT(datapath, Nq, Nep, Nl=2, dmodel=64, Nh=4, save_model=True,
-        save_loss=True, save_pt=True, save_dm=True):
+def AQT(datapath, Nq, Nep, Nl=2, dmodel=64, Nh=4, batch_size=100, lr_rate=1e-4,
+        save_model=True, save_loss=True, save_pt=True, save_dm=True,
+        save_mle_dm=True):
     """Train Transformer and extract density matrix using inversion
     
     Args:
@@ -39,6 +40,7 @@ def AQT(datapath, Nq, Nep, Nl=2, dmodel=64, Nh=4, save_model=True,
         device = torch.device("cuda:0")
     else:
         device = torch.device("cpu")
+    print('using device : ', device)
 
     # Load data, shape = ?
     data = np.load(f'{datapath}.npy')
@@ -57,11 +59,12 @@ def AQT(datapath, Nq, Nep, Nl=2, dmodel=64, Nh=4, save_model=True,
         device)
 
     # Training loop
-    t = time.time()
+    t1 = time.time()
     model, loss = A.TrainModel(model, traindata, testdata, device,
-                               batch_size=50, lr=1e-4, Nep=Nep)
-    print(f'Took {round(((time.time()-t)/60), 2)} minutes')
-    model.to('cpu')
+                               batch_size=batch_size, lr=lr_rate, Nep=Nep)
+    t = divmod(time.time() - t1, 60)
+    print(f'training : took {t[0]} minutes {t[1]} seconds')
+    
 
     if save_model:
         torch.save(model, f'{model_filetag}.mod')
@@ -69,7 +72,14 @@ def AQT(datapath, Nq, Nep, Nl=2, dmodel=64, Nh=4, save_model=True,
         np.save(f'{model_filetag}_loss.npy', loss)
 
     # Build POVM probability table
-    pt_model = F.POVMProbTable(model)
+    if Nq <= 10:
+        # Original - non-batched method
+        model.to('cpu')
+        pt_model = F.POVMProbTable(model)
+    else:
+        # new batched method to generate prob. table
+        pt_model = F.GenPOVMProbTable(model, batch_size)
+        model.to('cpu')
 
     if save_pt:
         np.save(f'{model_filetag}_pt.npy', pt_model)
@@ -77,23 +87,46 @@ def AQT(datapath, Nq, Nep, Nl=2, dmodel=64, Nh=4, save_model=True,
     # Reconstruct density matrix
     dm8 = np.zeros((8, 2**Nq, 2**Nq), dtype=complex)
 
+    t1 = time.time()
     for xyz in range(8):
         dm8[xyz] = F.GetDMFull(pt_model, Nq, P.POVM('pauli6', xyz))
-
-    _, _, dm_model = F.GetBestDM(dm8)
-
+    dm_return = F.WeightedDM(np.full((8), 1/8), dm8)
     if save_dm:
-        np.save('{}_dm.npy'.format(model_filetag), dm_model)
+        np.save('{}_pre_dm.npy'.format(model_filetag), dm_return)
 
-    return dm_model
+    if save_mle_dm:
+        t = divmod(time.time() - t1, 60)
+        print(f'GetDMFull : took {t[0]} minutes {t[1]} seconds')
+
+        _, _, dm_model = F.GetBestDM(dm8)
+        np.save('{}_post_dm.npy'.format(model_filetag), dm_model)
+        dm_return = dm_model
+
+    return dm_return
+
 
 if __name__ == '__main__':
+    # data
+    POVM = 'pauli6'
+    STATE = 'ghz'
+    HARDWARE = ''
+    N_SHOTS = 100
+    N_QUBITS = 6
+    N_MEAS = (3**N_QUBITS)*N_SHOTS if POVM == 'pauli6' else 0
 
-    datapath = 'data/w_3/pauli6_2700'
-    Nq = 3
-    Nep = 100
+    # training
+    N_EPOCHS = 200
+    BATCH_SIZE = 100
+    LR = 1e-3
+    SAVE_MLE_DM = True
 
-    Nl = 2
-    dmodel = 64
+    # model
+    N_LAYERS = 2
+    D_MODEL = 128
 
-    AQT(datapath, Nq, Nep, Nl=Nl, dmodel=dmodel)
+    t1 = time.time()
+    datapath = f'data/{STATE}_{N_QUBITS}{HARDWARE}/{N_QUBITS}_{N_MEAS}'
+    AQT(datapath, N_QUBITS, N_EPOCHS, Nl=N_LAYERS, dmodel=D_MODEL,
+        batch_size=BATCH_SIZE, lr_rate=LR, save_mle_dm=SAVE_MLE_DM)
+    t = divmod(time.time() - t1, 60)
+    print(f'main : took {t[0]} minutes {t[1]} seconds')

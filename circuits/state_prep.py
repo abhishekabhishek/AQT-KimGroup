@@ -1,5 +1,7 @@
 """Implementation of qiskit circuits to prepare W states for arbitrary N
-Source - https://github.com/vutuanhai237/UC-VQA/blob/main/codes/qtm/state.py
+Original source - https://github.com/vutuanhai237/UC-VQA
+
+Modified to work with the data collection notebook
 """
 
 import qiskit

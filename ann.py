@@ -68,7 +68,7 @@ class Transformer(nn.Module):
         for nq in range(self.Nq):
             outcome[nq] += 3
 
-        # tensor of dim (Nq + 2, 1) e.g. for i = 0, Na=6, Nq=3 -> trg =
+        # tensor of dim (Nq + 2) e.g. for i = 0, Na=6, Nq=3 -> trg =
         # [1, 3, 3, 3, 2]
         trg = torch.tensor([[1] + outcome + [2]])
         
@@ -88,6 +88,39 @@ class Transformer(nn.Module):
             return (p, p_tensor)
         else:
             return p
+
+    def batch_p(self, sequences):
+        """
+        Args:
+            sequences dims = (batch_size, n_qubits)
+
+        Returns:
+            p (float) : torch.exp(log_prob) of the sequence under the model
+        """
+        outcome = sequences + 3
+        if torch.cuda.is_available():
+            outcome = outcome.to(torch.device("cuda:0"))
+        outcome = outcome.long()
+
+        # tensor of dim (Nq + 2) e.g. for i = 0, Na=6, Nq=3 -> trg =
+        # [1, 3, 3, 3, 2]
+        trg = torch.nn.ConstantPad1d(1, 1)(outcome)
+        trg[:, -1] = trg[:, -1]*2
+
+        # Prepare input to be passed into attention
+        trg_mask = Batch.make_std_mask(trg, 0)
+        out = self.forward(trg, trg_mask)
+
+        log_p = self.generator(out)
+        p_tensor = torch.exp(log_p)
+
+        probs = torch.ones(trg.size(0))
+        
+        for i in range(probs.size(0)):
+            for nq in range(self.Nq):
+                probs[i] *= p_tensor[i, nq, outcome[i, nq]].item()
+            
+        return probs
     
     def generate_next(self, a_vec):
 
@@ -660,7 +693,7 @@ def make_model(Nq, tgt_vocab, N=6, d_model=512, d_ff=2048, h=8, dropout=0.):
     # Initialize parameters with Glorot / fan_avg.
     for p in model.parameters():
         if p.dim() > 1:
-            nn.init.xavier_uniform(p)
+            nn.init.xavier_uniform_(p)
     return model
 # / MAKE MODEL
 

@@ -1,10 +1,13 @@
 import numpy as np
+import torch
+from torch.utils.data import DataLoader
 from scipy.optimize import minimize
 from scipy.linalg import eigvalsh
 
-import copy, time
+import copy, time, math
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+
 
 
 # Exact classical fidelity
@@ -143,12 +146,60 @@ def POVMProbTable(gen):
         (np.ndarray) : Shape (Na**Nq, 1) with prob. for each possible possible
                        tensor product POVM outcome
     """
+    t1 = time.time()
     # No. of qubits and no. of POVM elements
     Nq, Na = gen.Nq, gen.Na
 
-    # Vector of dimension (Na**Nq x 1)
-    return np.array([gen.p(int2basestr(n, Na, l=Nq)) for n in range(Na**Nq)],
+    
+    # Vector of dimension (Na**Nq x 1) - main place that could be taking too
+    # Note that the samples are not being batched - batch_size = 1
+    probs = np.array([gen.p(int2basestr(n, Na, l=Nq)) for n in range(Na**Nq)],
                     dtype=float)
+    t = divmod(time.time() - t1, 60)
+    print(f'POVMProbTable : took {t[0]} minutes {t[1]} seconds')
+    return probs
+    
+def GenPOVMProbTable(gen, batch_size):
+    """Build POVM probability table using the generator
+
+    Args:
+        gen (nn.Module) : Generative model under which to calculate the 
+                          probabilities for all possible POVM outcomes
+    Returns:
+        (np.ndarray) : Shape (Na**Nq, 1) with prob. for each possible possible
+                       tensor product POVM outcome
+    """
+    t1 = time.time()
+    # No. of qubits and no. of POVM elements
+    Nq, Na = gen.Nq, gen.Na
+    outcomes, probs = np.arange(Na**Nq), np.ones(Na**Nq)
+    n_batches = math.ceil(len(outcomes)/batch_size)
+
+    # Trying to vectorize int2basestr
+    v_int2basestr = np.vectorize(int2basestr, otypes=[np.ndarray])
+    sequences = np.zeros((len(outcomes), Nq))
+    
+    # Construct sequences
+    ret = v_int2basestr(outcomes, Na, l=Nq)
+    for j in range(batch_size):
+        sequences[j] = ret[j]
+        
+    seq_data = DataLoader(sequences, batch_size=batch_size)
+
+    for i, seq_batch in enumerate(seq_data):
+        if i == n_batches-1:
+            probs[i*batch_size:] = gen.batch_p(
+                seq_batch).detach().cpu().numpy()
+        else:
+            probs[i*batch_size:(i+1)*batch_size] = gen.batch_p(
+                seq_batch).detach().cpu().numpy()
+
+    t = divmod(time.time() - t1, 60)
+    print(f'GenPOVMProbTable : took {t[0]} minutes {t[1]} seconds')
+    
+    # Vector of dimension (Na**Nq x 1) - main place that could be taking too
+    # Note that the samples are not being batched - batch_size = 1
+    return probs
 
 
 def ClFid(ptab1, ptab2):
@@ -267,6 +318,7 @@ def MaxNegEig(weights, dm8):
     return max(0, -min(w.real))
 
 def GetBestDM(dm8):
+    t1 = time.time()
     x0 = np.full((7), 1/8)
     bnds = ((0, None), (0, None), (0, None), (0, None), (0, None), (0, None),
             (0, None))
@@ -274,4 +326,6 @@ def GetBestDM(dm8):
     res = minimize(MaxNegEig, x0, args=(dm8), bounds=bnds, constraints=cons)
     weights = np.append(res.x, 1-sum(res.x))
     dm = WeightedDM(weights, dm8)
+    t = divmod(time.time() - t1, 60)
+    print(f'GetBestDM : took {t[0]} minutes {t[1]} seconds')
     return weights, res.fun, dm/np.trace(dm)
