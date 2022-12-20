@@ -1,8 +1,10 @@
 # Benchmarking Attention-based Quantum State Tomography
 
-The work was conducted using a forked version of the open-source package linked with the original work (https://github.com/KimGroup/AQT).
+***Abstract*** - Quantum tomography is the process of characterizing a quantum system through a series of measurements. Recent experimental realizations of increasingly large and complex quantum information processing devices have led to a need for resource efficient and accurate tomography techniques. An important problem in quantum tomography is the exponential scaling of resources with system size. In this project, we explore a recent work which applies transformer neural networks to improve resource efficiency of quantum state tomography by modelling correlations in measurement outcomes. We perform empirical evaluation of the framework on different quantum states of interest in quantum information processing, and benchmark its performance against standard techniques in quantum state tomography.
 
-We made several additions and changes to the original codebase to perform the empirical analysis presented above and the modified codebase is attached to this report. 
+You can read the project report here : [report.pdf](report.pdf) 
+
+The work was conducted using a forked version of the open-source package linked with the original work (https://github.com/KimGroup/AQT). We made several additions and changes to the original codebase to perform the empirical analysis presented above and the modified codebase is attached to this report. 
 
 - The (**notebooks**) directory contains all newly added IPython notebooks to preare the different quantum states, perform the tomography experiments, collect measurement outcome data, perform standard linear inversion and MLE (**ibm\_get\_data.ipynb**), compute the quantum fidelities and visualize the results (**results.ipynb**). 
 
@@ -16,7 +18,7 @@ We made several additions and changes to the original codebase to perform the em
 
 To run,
 
-first generate a dataset using (**ibm\_get\_data.ipynb**) by configuring the system setup, 
+you need to first generate a dataset using (**ibm\_get\_data.ipynb**) by configuring the system setup, 
 
 ```# System setup
 n_qubits = 6
@@ -30,7 +32,7 @@ circ = QuantumCircuit(n_qubits)
 state = 'ghz'
 ```
 
-Now setup the hyper-parameters in (**aqt.py**), for e.g.
+then setup the hyper-parameters in (**aqt.py**), for e.g.
 
 ```
 # data
@@ -52,7 +54,7 @@ N_LAYERS = 4
 D_MODEL = 128
 ```
 
-Finally, to evaluate the metrics and visualize the results setup the system in (**results.ipynb**)
+and finally, to evaluate the metrics and visualize the results setup the system in (**results.ipynb**)
 
 ```
 # System setup
