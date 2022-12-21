@@ -4,7 +4,7 @@
 
 You can read the project report here : [report.pdf](report.pdf) 
 
-The work was conducted using a forked version of the open-source package linked with the original work (https://github.com/KimGroup/AQT). We made several additions and changes to the original codebase to perform the empirical analysis presented above and the modified codebase is attached to this report. 
+The work was conducted using a forked version of the open-source package linked with the original work (https://github.com/KimGroup/AQT). We made several additions and changes to the original codebase to perform the empirical analysis presented above. 
 
 - The (**notebooks**) directory contains all newly added IPython notebooks to preare the different quantum states, perform the tomography experiments, collect measurement outcome data, perform standard linear inversion and MLE (**ibm\_get\_data.ipynb**), compute the quantum fidelities and visualize the results (**results.ipynb**). 
 
